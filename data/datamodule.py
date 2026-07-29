@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import cv2
 import lightning as L
 from torch.utils.data import DataLoader
 
@@ -14,6 +15,13 @@ from data.hf_datasets import (
     get_gvlm,
     get_oscd96,
 )
+
+
+def _worker_init_fn(worker_id):
+    # Prevent OpenCV's internal thread pool from fighting with DataLoader
+    # worker processes; on Windows this combination corrupts worker heaps
+    # and causes spurious tiny-array allocation failures.
+    cv2.setNumThreads(0)
 
 
 class CDDataModule(L.LightningDataModule):
@@ -99,6 +107,7 @@ class CDDataModule(L.LightningDataModule):
             drop_last=True,
             shuffle=True,
             persistent_workers=self.config.data.num_workers > 0,
+            worker_init_fn=_worker_init_fn,
         )
 
     def val_dataloader(self):
@@ -108,6 +117,7 @@ class CDDataModule(L.LightningDataModule):
             num_workers=self.config.data.num_workers,
             # pin_memory=self.config.data.pin_memory,
             persistent_workers=self.config.data.num_workers > 0,
+            worker_init_fn=_worker_init_fn,
         )
 
     def test_dataloader(self):
@@ -117,6 +127,7 @@ class CDDataModule(L.LightningDataModule):
             num_workers=self.config.data.num_workers,
             # pin_memory=self.config.data.pin_memory,
             persistent_workers=self.config.data.num_workers > 0,
+            worker_init_fn=_worker_init_fn,
         )
 
 

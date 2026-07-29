@@ -163,6 +163,19 @@ class HFBackbone(BaseCDEncoder):
                 ).model.pixel_level_module.encoder
 
             self.patch_size = hf_config.backbone_config.patch_size
+        elif "dinov3" in model_name.lower():
+            # isotropic ViT backbone (DINOv3): all returned layers share the same
+            # stride, unlike Swin/ResNet's hierarchical multi-scale stages.
+            hf_config.out_features = out_list
+            if self.drop_path_rate is not None:
+                hf_config.drop_path_rate = self.drop_path_rate
+
+            if self.pretrained:
+                self.backbone = AutoBackbone.from_pretrained(model_name, config=hf_config)
+            else:
+                self.backbone = AutoBackbone.from_config(config=hf_config)
+
+            self.patch_size = getattr(hf_config, "patch_size", None)
         elif hf_config is None:
             # timm backbones
             if self.pretrained:

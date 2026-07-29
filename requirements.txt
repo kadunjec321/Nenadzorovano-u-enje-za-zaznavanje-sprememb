@@ -8,7 +8,8 @@ h5py
 matplotlib
 
 # pretrained backbones
-transformers==4.48.3
+# NOTE: DINOv3 requires >=4.56.0; bumped from 4.48.3 (verify existing Mask2Former/UperNet configs still load)
+transformers>=4.56.0,<5.0.0
 
 --extra-index-url https://download.pytorch.org/whl/cu118
 torch==2.7.0

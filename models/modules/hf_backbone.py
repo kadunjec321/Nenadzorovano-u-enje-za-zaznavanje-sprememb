@@ -167,8 +167,14 @@ class HFBackbone(BaseCDEncoder):
             # isotropic ViT backbone (DINOv3): all returned layers share the same
             # stride, unlike Swin/ResNet's hierarchical multi-scale stages.
             # Loaded via the model-specific class rather than AutoBackbone since
-            # DINOv3 isn't registered in AutoBackbone's mapping in every transformers release.
-            from transformers import DINOv3ViTBackbone
+            # DINOv3 isn't registered in AutoBackbone's mapping in every transformers release,
+            # and isn't always exposed at the top-level `transformers` package either.
+            try:
+                from transformers import DINOv3ViTBackbone
+            except ImportError:
+                from transformers.models.dinov3_vit.modeling_dinov3_vit import (
+                    DINOv3ViTBackbone,
+                )
 
             hf_config.out_features = out_list
             if self.drop_path_rate is not None:

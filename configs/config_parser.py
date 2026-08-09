@@ -58,6 +58,7 @@ class DataArgs:
     data_path: str = "./datasets"
     use_hf: bool = True
     load_in_mem: str | None = None
+    synth_method: str | None = None  # "cutpaste" / "cutmix": train on synthetic pairs instead of real labels
 
 
 def add_arguments(parser: ArgumentParser):

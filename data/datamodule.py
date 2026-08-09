@@ -5,6 +5,7 @@ import lightning as L
 from torch.utils.data import DataLoader
 
 from data.dataset import CDDataset
+from data.synthetic_change import SyntheticChangeDataset
 from data.transforms import build_transforms
 
 from data.hf_datasets import (
@@ -128,6 +129,67 @@ class CDDataModule(L.LightningDataModule):
             # pin_memory=self.config.data.pin_memory,
             persistent_workers=self.config.data.num_workers > 0,
             worker_init_fn=_worker_init_fn,
+        )
+
+
+class SyntheticCDDataModule(CDDataModule):
+    """
+    Self-supervised variant of CDDataModule: train/val are synthetic
+    (imageA, imageB, label) triples generated on the fly via cutpaste/cutmix
+    from the target dataset's own images (no real change labels used), while
+    test stays the real dataset - so the normal train.py eval step at the end
+    of a run already produces the real zero-shot metric.
+
+    Val uses a fixed `val_seed` so the same synthetic pairs are regenerated
+    each epoch (a stable signal to track); train regenerates fresh every time.
+    """
+
+    def __init__(
+        self,
+        config,
+        data_path: str = None,
+        use_hf=True,
+        load_in_mem=False,
+        synth_method: str = "cutpaste",
+        val_seed: int = 42,
+    ):
+        self.synth_method = synth_method
+        self.val_seed = val_seed
+        super().__init__(
+            config,
+            pretrain=False,
+            data_path=data_path,
+            use_hf=use_hf,
+            load_in_mem=load_in_mem,
+        )
+
+    def prepare_dataset(self):
+        self.dataset_name = self.config.data.dataset
+
+        data = get_hf_dataset(self.dataset_name, self.data_path)
+        data.set_format("numpy")
+
+        # pool both timepoints as source images - both are just single
+        # unlabeled satellite images from the encoder's point of view
+        source_images = list(data["train"]["imageA"]) + list(data["train"]["imageB"])
+
+        train_transforms = build_transforms(self.config, pretrain=False, test=False)
+        test_transforms = build_transforms(self.config, pretrain=False, test=True)
+
+        self.train_data = SyntheticChangeDataset(
+            source_images, train_transforms, method=self.synth_method
+        )
+        self.val_data = SyntheticChangeDataset(
+            source_images,
+            test_transforms,
+            method=self.synth_method,
+            seed=self.val_seed,
+        )
+        self.test_data = CDDataset(
+            data["test"],
+            test_transforms,
+            use_hf=self.use_hf,
+            load_in_mem=self.load_in_mem,
         )
 
 

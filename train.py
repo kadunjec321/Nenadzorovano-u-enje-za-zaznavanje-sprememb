@@ -15,7 +15,7 @@ from torchmetrics.classification import (
 )
 
 from configs.config_parser import get_parser
-from data.datamodule import CDDataModule
+from data.datamodule import CDDataModule, SyntheticCDDataModule
 from models.callbacks.visualiser import Visualizer
 
 from models.finetune_framework import FinetuneFramework
@@ -121,13 +121,22 @@ def main(seed=None):
 
     seed_everything(config.seed)
 
-    datamodule = CDDataModule(
-        config,
-        data_path=config.data.data_path,
-        pretrain=False,
-        use_hf=config.data.use_hf,
-        load_in_mem=config.data.load_in_mem,
-    )
+    if config.data.synth_method:
+        datamodule = SyntheticCDDataModule(
+            config,
+            data_path=config.data.data_path,
+            use_hf=config.data.use_hf,
+            load_in_mem=config.data.load_in_mem,
+            synth_method=config.data.synth_method,
+        )
+    else:
+        datamodule = CDDataModule(
+            config,
+            data_path=config.data.data_path,
+            pretrain=False,
+            use_hf=config.data.use_hf,
+            load_in_mem=config.data.load_in_mem,
+        )
 
     finetune_framework = FinetuneFramework(
         config_namespace=config,

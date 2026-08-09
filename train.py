@@ -5,7 +5,7 @@ import torch
 import wandb
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
-from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.loggers import WandbLogger, CSVLogger
 from torchmetrics import MetricCollection
 from torchmetrics.classification import (
     BinaryF1Score,
@@ -163,7 +163,9 @@ def main(seed=None):
             project=config.wandb_proj, log_model=False, name=run_name
         )
     else:
-        wandb_logger = None
+        # still log metrics locally (res_path/metrics.csv) even without wandb,
+        # instead of silently disabling logging altogether
+        wandb_logger = CSVLogger(save_dir=str(res_path), name="", version="")
 
     if config.eval_only:
         finetune_framework = load_weights(config, finetune_framework, res_path)

@@ -44,6 +44,7 @@ class HFBackbone(BaseCDEncoder):
         self.pretrained: bool
         self.backbone: nn.Module | None = None
         self.patch_size: int
+        self._isotropic_vit = False  # True for plain-ViT backbones with no HF Backbone wrapper (e.g. DINOv3)
 
         self.lr_adjustments = lr_adjustments  # backwards compatibility
         self.drop_path_rate: bool
@@ -164,30 +165,26 @@ class HFBackbone(BaseCDEncoder):
 
             self.patch_size = hf_config.backbone_config.patch_size
         elif "dinov3" in model_name.lower():
-            # isotropic ViT backbone (DINOv3): all returned layers share the same
-            # stride, unlike Swin/ResNet's hierarchical multi-scale stages.
-            # Loaded via the model-specific class rather than AutoBackbone since
-            # DINOv3 isn't registered in AutoBackbone's mapping in every transformers release,
-            # and isn't always exposed at the top-level `transformers` package either.
-            try:
-                from transformers import DINOv3ViTBackbone
-            except ImportError:
-                from transformers.models.dinov3_vit.modeling_dinov3_vit import (
-                    DINOv3ViTBackbone,
-                )
+            # isotropic ViT backbone (DINOv3): every layer has the same spatial
+            # resolution, unlike Swin/ResNet's hierarchical multi-scale stages.
+            # transformers doesn't ship a Backbone wrapper for DINOv3 yet (only
+            # the plain model), so we pull hidden_states ourselves and reshape
+            # the patch tokens back into a (B, C, H, W) grid in forward().
+            from transformers import DINOv3ViTModel
 
-            hf_config.out_features = out_list
             if self.drop_path_rate is not None:
                 hf_config.drop_path_rate = self.drop_path_rate
 
             if self.pretrained:
-                self.backbone = DINOv3ViTBackbone.from_pretrained(
+                self.backbone = DINOv3ViTModel.from_pretrained(
                     model_name, config=hf_config
                 )
             else:
-                self.backbone = DINOv3ViTBackbone(hf_config)
+                self.backbone = DINOv3ViTModel(hf_config)
 
             self.patch_size = getattr(hf_config, "patch_size", None)
+            self._isotropic_vit = True
+            self._hidden_size = hf_config.hidden_size
         elif hf_config is None:
             # timm backbones
             if self.pretrained:
@@ -238,6 +235,20 @@ class HFBackbone(BaseCDEncoder):
         if not self.finetune:
             self.backbone.eval()
 
+        if self._isotropic_vit:
+            outputs = self.backbone(pixel_values=x, output_hidden_states=True)
+            b, _, h, w = x.shape
+            ph, pw = h // self.patch_size, w // self.patch_size
+            num_patches = ph * pw
+
+            rd = {}
+            for i in self.return_layers:
+                # CLS/register tokens are always prefixed before the patch
+                # tokens in ViT-style models, so keep just the last num_patches
+                hs = outputs.hidden_states[i][:, -num_patches:, :]
+                rd[i] = hs.transpose(1, 2).reshape(b, self._hidden_size, ph, pw)
+            return rd
+
         if mask is None:
             feat = self.backbone(x)
         else:
@@ -278,6 +289,9 @@ class HFBackbone(BaseCDEncoder):
 
     @torch.no_grad()
     def get_strides(self) -> list[int]:
+        if self._isotropic_vit:
+            return [self.patch_size] * len(self.return_layers)
+
         was_train = self.backbone.training
         self.backbone.eval()
         feat = self.backbone(torch.rand(1, 3, 256, 256))
@@ -286,6 +300,8 @@ class HFBackbone(BaseCDEncoder):
         return [256 / f.shape[2] for f in feat.feature_maps]
 
     def get_out_dims(self) -> list[int]:
+        if self._isotropic_vit:
+            return [self._hidden_size] * len(self.return_layers)
         return self.backbone.channels
 
     def transfer_from_pretrained(self, state_dict: dict):

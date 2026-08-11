@@ -5,7 +5,11 @@ import lightning as L
 from torch.utils.data import DataLoader
 
 from data.dataset import CDDataset
-from data.synthetic_change import SyntheticChangeDataset
+from data.synthetic_change import (
+    SyntheticChangeDataset,
+    DATASET_CALIBRATION,
+    DEFAULT_CALIBRATION,
+)
 from data.transforms import build_transforms
 
 from data.hf_datasets import (
@@ -173,16 +177,22 @@ class SyntheticCDDataModule(CDDataModule):
         # unlabeled satellite images from the encoder's point of view
         source_images = list(data["train"]["imageA"]) + list(data["train"]["imageB"])
 
+        # dataset-specific calibration of change area/frequency, measured from
+        # each dataset's real (train-split) label masks - see synthetic_change.py
+        calib = DATASET_CALIBRATION.get(self.dataset_name, DEFAULT_CALIBRATION)
+        print(f"Synthetic change calibration for {self.dataset_name}: {calib}")
+
         train_transforms = build_transforms(self.config, pretrain=False, test=False)
         test_transforms = build_transforms(self.config, pretrain=False, test=True)
 
         self.train_data = SyntheticChangeDataset(
-            source_images, train_transforms, method=self.synth_method
+            source_images, train_transforms, method=self.synth_method, **calib
         )
         self.val_data = SyntheticChangeDataset(
             source_images,
             test_transforms,
             method=self.synth_method,
+            **calib,
             seed=self.val_seed,
         )
         self.test_data = CDDataset(

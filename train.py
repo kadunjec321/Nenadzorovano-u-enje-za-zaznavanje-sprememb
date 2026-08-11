@@ -95,10 +95,10 @@ def load_weights(config, finetune_framework, res_path):
             config.ckpt_path,
             metrics=MetricCollection(
                 {
-                    "F1": BinaryF1Score(),
-                    "Recall": BinaryRecall(),
-                    "Precision": BinaryPrecision(),
-                    "cIoU": BinaryJaccardIndex(),
+                    "F1": BinaryF1Score(threshold=config.eval_threshold),
+                    "Recall": BinaryRecall(threshold=config.eval_threshold),
+                    "Precision": BinaryPrecision(threshold=config.eval_threshold),
+                    "cIoU": BinaryJaccardIndex(threshold=config.eval_threshold),
                 }
             ),
             logger=None,
@@ -174,10 +174,10 @@ def main(seed=None):
         config=config.as_dict(),
         metrics=MetricCollection(
             {
-                "F1": BinaryF1Score(),
-                "Recall": BinaryRecall(),
-                "Precision": BinaryPrecision(),
-                "cIoU": BinaryJaccardIndex(),
+                "F1": BinaryF1Score(threshold=config.eval_threshold),
+                "Recall": BinaryRecall(threshold=config.eval_threshold),
+                "Precision": BinaryPrecision(threshold=config.eval_threshold),
+                "cIoU": BinaryJaccardIndex(threshold=config.eval_threshold),
             }
         ),
         logger=None,

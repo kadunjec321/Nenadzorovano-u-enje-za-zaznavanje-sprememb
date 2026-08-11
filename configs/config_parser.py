@@ -110,6 +110,12 @@ def add_arguments(parser: ArgumentParser):
         ),
     )
     parser.add_argument(
+        "--eval_threshold",
+        type=float,
+        default=0.5,
+        help="decision threshold applied to the sigmoid change-probability map when computing F1/Precision/Recall/cIoU. Default 0.5 matches prior behaviour (torchmetrics default).",
+    )
+    parser.add_argument(
         "--early_stop_patience",
         type=int,
         default=None,

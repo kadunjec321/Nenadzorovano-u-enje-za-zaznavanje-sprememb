@@ -3,6 +3,22 @@ from pathlib import Path
 import pandas as pd
 import torch
 import wandb
+
+# PyTorch >=2.6 defaults torch.load to weights_only=True, which rejects the
+# jsonargparse config objects Lightning checkpoints (via --resume_from) embed
+# alongside the model state. These are always OUR OWN just-created checkpoints
+# (not downloaded from elsewhere), so restoring the old, permissive default is
+# safe here - matches load_weights() below, which already does this explicitly
+# for eval_only checkpoints.
+_torch_load = torch.load
+
+
+def _torch_load_full(*args, **kwargs):
+    kwargs.setdefault("weights_only", False)
+    return _torch_load(*args, **kwargs)
+
+
+torch.load = _torch_load_full
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import WandbLogger, CSVLogger

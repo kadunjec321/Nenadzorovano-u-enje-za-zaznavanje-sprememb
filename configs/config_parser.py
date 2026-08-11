@@ -95,6 +95,18 @@ def add_arguments(parser: ArgumentParser):
         help="run only evaluation. Note: requires mandatory weight passed with --ckpt_path",
         action="store_true",
     )
+    parser.add_argument(
+        "--resume_from",
+        type=str,
+        default=None,
+        help=(
+            "path to a local .ckpt file to RESUME training from (full state: "
+            "weights+optimizer+scheduler+epoch count), e.g. one saved by an earlier "
+            "run via --ckpt_path. NOTE: --train.epochs is the TOTAL epoch count to "
+            "reach, not additional epochs - e.g. resuming a 5-epoch checkpoint to "
+            "train 25 more needs --train.epochs 30."
+        ),
+    )
 
 
 def add_framework_arguments(parser: ArgumentParser):

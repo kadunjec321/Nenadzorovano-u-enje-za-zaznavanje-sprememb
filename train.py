@@ -55,6 +55,7 @@ def finetune(framework, datamodule, config, wandb_logger):
     trainer.fit(
         model=framework,
         datamodule=datamodule,
+        ckpt_path=config.resume_from,
     )
 
 

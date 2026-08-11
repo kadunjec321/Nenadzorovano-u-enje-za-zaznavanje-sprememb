@@ -2,6 +2,8 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 
+from data.draem_change import draem_perlin
+
 # Per-dataset calibration measured from each dataset's real train-split label
 # masks (fraction of changed pixels per image, n=200 sample): `area_ratio`
 # spans roughly p10-p90 (with margin toward the max) of real change area when
@@ -90,8 +92,9 @@ def cutmix(image, source_image, area_ratio=(0.02, 0.15), aspect_ratio=(0.3, 3.3)
 class SyntheticChangeDataset(Dataset):
     """
     Generates (imageA, imageB, label) change-detection triples on the fly from
-    a pool of single unlabeled images, via cutpaste or cutmix. No real change
-    labels are used - the label is exactly the pasted region.
+    a pool of single unlabeled images, via cutpaste, cutmix or draem (Perlin
+    noise + soft blend). No real change labels are used - the label is
+    exactly the pasted/blended region.
 
     Same __getitem__ return contract as CDDataset, so it's a drop-in
     replacement wherever a CDDataset is used (train.py, visualiser callback, ...).
@@ -116,8 +119,10 @@ class SyntheticChangeDataset(Dataset):
         no_change_prob: float = 0.0,
         seed: int | None = None,
     ):
-        if method not in ("cutpaste", "cutmix"):
-            raise ValueError(f"Unknown synthetic method {method}, expected 'cutpaste' or 'cutmix'")
+        if method not in ("cutpaste", "cutmix", "draem"):
+            raise ValueError(
+                f"Unknown synthetic method {method}, expected 'cutpaste', 'cutmix' or 'draem'"
+            )
 
         self.images = images
         self.transform = transform
@@ -139,9 +144,12 @@ class SyntheticChangeDataset(Dataset):
             label = np.zeros(image.shape[:2], dtype=np.uint8)
         elif self.method == "cutpaste":
             imageA, imageB, label = cutpaste(image, self.area_ratio, self.aspect_ratio, rng)
-        else:
+        elif self.method == "cutmix":
             other = np.asarray(self.images[rng.integers(0, len(self.images))])
             imageA, imageB, label = cutmix(image, other, self.area_ratio, self.aspect_ratio, rng)
+        else:  # draem
+            other = np.asarray(self.images[rng.integers(0, len(self.images))])
+            imageA, imageB, label = draem_perlin(image, other, self.area_ratio, rng)
 
         data = {"imageA": imageA, "imageB": imageB, "label": label, "img_idx": index}
         transformed = self.transform(data)

@@ -45,6 +45,10 @@ def finetune(framework, datamodule, config, wandb_logger):
         fast_dev_run=config.dev,
         gradient_clip_val=config.train.grad_clip_val,
         gradient_clip_algorithm="norm",
+        # otherwise Lightning silently adds its OWN default ModelCheckpoint
+        # (full state incl. optimizer, ~3x the weights-only size) even when
+        # ckpt_path is "None" and callbacks=[] - matches user-visible intent
+        enable_checkpointing=config.ckpt_path != "None",
         # strategy='ddp_find_unused_parameters_true'
     )
 

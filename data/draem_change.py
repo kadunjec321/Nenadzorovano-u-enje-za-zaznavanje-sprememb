@@ -6,13 +6,14 @@ def _fade(t):
     return 6 * t**5 - 15 * t**4 + 10 * t**3
 
 
-def _perlin_noise(h, w, res, rng):
+def _perlin_noise_raw(h, w, res, rng):
     """
     Vectorized 2D Perlin noise on an (h, w) grid, built from a (res+1, res+1)
     grid of random gradient vectors. Standard reference implementation
     (gradient noise + smoothstep interpolation), same approach DRAEM itself
     uses for its anomaly masks.
     """
+    res = max(1, min(res, min(h, w)))
     h_pad = ((h + res - 1) // res) * res
     w_pad = ((w + res - 1) // res) * res
     d = (h_pad // res, w_pad // res)
@@ -40,16 +41,59 @@ def _perlin_noise(h, w, res, rng):
     return noise[:h, :w]
 
 
-def _perlin_mask(h, w, area_ratio, rng, res_choices=(2, 4, 8)):
+def _perlin_noise(h, w, res, rng, angle=0.0):
     """
-    Organic blob-shaped binary mask via thresholded Perlin noise. The
+    Single-octave Perlin noise, optionally sampled on a grid rotated by
+    `angle` radians - breaks the axis-aligned "grain" a fixed-orientation
+    grid produces, so blob shapes don't all share the same bias.
+    """
+    if angle == 0.0:
+        return _perlin_noise_raw(h, w, res, rng)
+
+    # generate on a padded canvas so the post-rotation crop has no empty corners
+    diag = int(np.ceil(np.hypot(h, w))) + 1
+    noise = _perlin_noise_raw(diag, diag, res, rng)
+    rotated = Image.fromarray(noise.astype(np.float32), mode="F").rotate(
+        np.degrees(angle), resample=Image.BILINEAR
+    )
+    rotated = np.asarray(rotated)
+    y0, x0 = (diag - h) // 2, (diag - w) // 2
+    return rotated[y0 : y0 + h, x0 : x0 + w]
+
+
+def _fractal_perlin_noise(h, w, rng, base_res_range=(2, 16), octaves=(1, 4), persistence=0.5, lacunarity=2.0):
+    """
+    Fractal (multi-octave) Perlin noise: sums several single-octave layers at
+    doubling frequency and halving amplitude, all sampled on the SAME random
+    grid rotation. A randomized base frequency, octave count and rotation
+    together give much more varied blob shapes/scales than a single fixed-res
+    layer - avoids the model latching onto "one typical blob shape" as a
+    shortcut instead of actually comparing image content.
+    """
+    angle = rng.uniform(0, 2 * np.pi)
+    res = int(rng.integers(base_res_range[0], base_res_range[1] + 1))
+    n_octaves = int(rng.integers(octaves[0], octaves[1] + 1))
+
+    noise = np.zeros((h, w), dtype=np.float32)
+    amplitude, total_amplitude = 1.0, 0.0
+    for _ in range(n_octaves):
+        noise += amplitude * _perlin_noise(h, w, res, rng, angle=angle)
+        total_amplitude += amplitude
+        amplitude *= persistence
+        res = int(round(res * lacunarity))
+
+    return noise / total_amplitude
+
+
+def _perlin_mask(h, w, area_ratio, rng, base_res_range=(2, 16), octaves=(1, 4)):
+    """
+    Organic blob-shaped binary mask via thresholded fractal Perlin noise. The
     threshold is picked as the exact quantile of the noise field needed to
     hit a randomly-sampled target area within `area_ratio` - no rejection
     sampling needed, since we know the noise distribution directly.
     """
     target_area = rng.uniform(*area_ratio)
-    res = int(rng.choice(res_choices))
-    noise = _perlin_noise(h, w, res, rng)
+    noise = _fractal_perlin_noise(h, w, rng, base_res_range=base_res_range, octaves=octaves)
     threshold = np.quantile(noise, 1 - target_area)
     mask = (noise > threshold).astype(np.uint8) * 255
     return mask

@@ -54,7 +54,7 @@ def finetune(framework, datamodule, config, wandb_logger):
     if config.early_stop_patience is not None:
         callbacks.append(
             EarlyStopping(
-                monitor="F1", mode="max", patience=config.early_stop_patience, min_delta=0.005
+                monitor="F1", mode="max", patience=config.early_stop_patience, min_delta=0.02
             )
         )
 

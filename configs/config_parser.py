@@ -109,6 +109,17 @@ def add_arguments(parser: ArgumentParser):
             "train 25 more needs --train.epochs 30."
         ),
     )
+    parser.add_argument(
+        "--early_stop_patience",
+        type=int,
+        default=None,
+        help=(
+            "stop training once val F1 (on the synthetic val set for self-supervised "
+            "runs) stops improving for this many validation checks in a row (checks "
+            "happen every train.val_freq epochs, not every epoch). Unset/None disables "
+            "early stopping (default) - training always runs to --train.epochs."
+        ),
+    )
 
 
 def add_framework_arguments(parser: ArgumentParser):

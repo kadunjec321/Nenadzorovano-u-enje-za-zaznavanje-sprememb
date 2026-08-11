@@ -21,7 +21,7 @@ def _torch_load_full(*args, **kwargs):
 
 torch.load = _torch_load_full
 from lightning import Trainer, seed_everything
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from lightning.pytorch.loggers import WandbLogger, CSVLogger
 from torchmetrics import MetricCollection
 from torchmetrics.classification import (
@@ -50,6 +50,13 @@ def finetune(framework, datamodule, config, wandb_logger):
         callbacks = [ckpt_callback]
     else:
         callbacks = []
+
+    if config.early_stop_patience is not None:
+        callbacks.append(
+            EarlyStopping(
+                monitor="F1", mode="max", patience=config.early_stop_patience, min_delta=0.005
+            )
+        )
 
     trainer = Trainer(
         max_epochs=config.train.epochs,

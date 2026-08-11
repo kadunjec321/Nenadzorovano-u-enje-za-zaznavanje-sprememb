@@ -9,3 +9,4 @@ weights/*
 results/**/visual/*
 sout*
 datasets
+launch/

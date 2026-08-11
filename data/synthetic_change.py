@@ -107,6 +107,13 @@ class SyntheticChangeDataset(Dataset):
     changed" pair (imageA == imageB, empty mask) instead of running
     cutpaste/cutmix - real change-detection datasets are mostly no-change
     pixels/images, so without this the model never sees that case at all.
+
+    `source_images`, if given, is a SEPARATE pool used only as the "donor"
+    content for cutmix/draem (e.g. DTD textures via data/dtd_source.py),
+    instead of reusing `images` (the target dataset's own pool) for both
+    roles. `soft_edges` (draem only) is passed straight through to
+    draem_perlin() - both are optional, independently-testable variables,
+    off by default.
     """
 
     def __init__(
@@ -117,6 +124,8 @@ class SyntheticChangeDataset(Dataset):
         area_ratio: tuple[float, float] = (0.02, 0.15),
         aspect_ratio: tuple[float, float] = (0.3, 3.3),
         no_change_prob: float = 0.0,
+        soft_edges: bool = False,
+        source_images=None,
         seed: int | None = None,
     ):
         if method not in ("cutpaste", "cutmix", "draem"):
@@ -125,11 +134,13 @@ class SyntheticChangeDataset(Dataset):
             )
 
         self.images = images
+        self.source_images = source_images if source_images is not None else images
         self.transform = transform
         self.method = method
         self.area_ratio = area_ratio
         self.aspect_ratio = aspect_ratio
         self.no_change_prob = no_change_prob
+        self.soft_edges = soft_edges
         self.seed = seed
 
     def __len__(self):
@@ -145,11 +156,13 @@ class SyntheticChangeDataset(Dataset):
         elif self.method == "cutpaste":
             imageA, imageB, label = cutpaste(image, self.area_ratio, self.aspect_ratio, rng)
         elif self.method == "cutmix":
-            other = np.asarray(self.images[rng.integers(0, len(self.images))])
+            other = np.asarray(self.source_images[rng.integers(0, len(self.source_images))])
             imageA, imageB, label = cutmix(image, other, self.area_ratio, self.aspect_ratio, rng)
         else:  # draem
-            other = np.asarray(self.images[rng.integers(0, len(self.images))])
-            imageA, imageB, label = draem_perlin(image, other, self.area_ratio, rng)
+            other = np.asarray(self.source_images[rng.integers(0, len(self.source_images))])
+            imageA, imageB, label = draem_perlin(
+                image, other, self.area_ratio, rng, soft_edges=self.soft_edges
+            )
 
         data = {"imageA": imageA, "imageB": imageB, "label": label, "img_idx": index}
         transformed = self.transform(data)

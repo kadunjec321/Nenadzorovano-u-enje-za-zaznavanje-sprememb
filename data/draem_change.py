@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image
+from scipy.ndimage import gaussian_filter
 
 
 def _fade(t):
@@ -85,21 +86,35 @@ def _fractal_perlin_noise(h, w, rng, base_res_range=(2, 16), octaves=(1, 4), per
     return noise / total_amplitude
 
 
-def _perlin_mask(h, w, area_ratio, rng, base_res_range=(2, 16), octaves=(1, 4)):
+def _perlin_mask(
+    h, w, area_ratio, rng, base_res_range=(2, 16), octaves=(1, 4), soft_edges=False, blur_sigma_range=(2.0, 6.0)
+):
     """
-    Organic blob-shaped binary mask via thresholded fractal Perlin noise. The
+    Organic blob-shaped mask via thresholded fractal Perlin noise. The
     threshold is picked as the exact quantile of the noise field needed to
     hit a randomly-sampled target area within `area_ratio` - no rejection
     sampling needed, since we know the noise distribution directly.
+
+    By default the mask is hard-edged (binary 0/255), same as DRAEM's own
+    masks. `soft_edges=True` Gaussian-blurs it into a gradual 0-255 ramp at
+    the boundary instead of a sharp cutoff - an optional, separately testable
+    variable, not applied automatically.
     """
     target_area = rng.uniform(*area_ratio)
     noise = _fractal_perlin_noise(h, w, rng, base_res_range=base_res_range, octaves=octaves)
     threshold = np.quantile(noise, 1 - target_area)
-    mask = (noise > threshold).astype(np.uint8) * 255
-    return mask
+    mask = (noise > threshold).astype(np.float32) * 255
+
+    if soft_edges:
+        sigma = rng.uniform(*blur_sigma_range)
+        mask = gaussian_filter(mask, sigma=sigma)
+
+    return mask.astype(np.uint8)
 
 
-def draem_perlin(image, source_image, area_ratio, rng=None, beta_range=(0.1, 1.0)):
+def draem_perlin(
+    image, source_image, area_ratio, rng=None, beta_range=(0.1, 1.0), soft_edges=False
+):
     """
     DRAEM-like synthetic change: an organic Perlin-noise-shaped mask, with
     `source_image` content SOFTLY alpha-blended into `image` inside that mask
@@ -107,12 +122,16 @@ def draem_perlin(image, source_image, area_ratio, rng=None, beta_range=(0.1, 1.0
     replace. Returns (imageA, imageB, mask), same contract as cutpaste()/
     cutmix() in data/synthetic_change.py.
 
-    `source_image` is just another image from the same pool for now (no
-    external texture dataset like DTD yet - that's a separate follow-up).
+    `source_image` is another image from a pool - either the same target
+    dataset's own images, or an external texture pool like DTD (see
+    data/dtd_source.py and SyntheticCDDataModule's `change_source` option).
+
+    `soft_edges=True` blurs the mask boundary (see `_perlin_mask`) instead of
+    a hard cutoff - an independent, optional variable.
     """
     rng = rng or np.random.default_rng()
     h, w = image.shape[:2]
-    mask = _perlin_mask(h, w, area_ratio, rng)
+    mask = _perlin_mask(h, w, area_ratio, rng, soft_edges=soft_edges)
 
     if source_image.shape[:2] != (h, w):
         source_image = np.array(Image.fromarray(source_image).resize((w, h)))

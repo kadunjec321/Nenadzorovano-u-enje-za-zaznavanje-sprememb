@@ -150,6 +150,8 @@ def main(seed=None):
             use_hf=config.data.use_hf,
             load_in_mem=config.data.load_in_mem,
             synth_method=config.data.synth_method,
+            change_source=config.data.synth_change_source,
+            soft_edges=config.data.synth_soft_edges,
         )
     else:
         datamodule = CDDataModule(

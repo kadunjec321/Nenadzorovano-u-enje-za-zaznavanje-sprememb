@@ -155,9 +155,13 @@ class SyntheticCDDataModule(CDDataModule):
         use_hf=True,
         load_in_mem=False,
         synth_method: str = "cutpaste",
+        change_source: str = "self",
+        soft_edges: bool = False,
         val_seed: int = 42,
     ):
         self.synth_method = synth_method
+        self.change_source = change_source
+        self.soft_edges = soft_edges
         self.val_seed = val_seed
         super().__init__(
             config,
@@ -173,9 +177,22 @@ class SyntheticCDDataModule(CDDataModule):
         data = get_hf_dataset(self.dataset_name, self.data_path)
         data.set_format("numpy")
 
-        # pool both timepoints as source images - both are just single
+        # pool both timepoints as target images - both are just single
         # unlabeled satellite images from the encoder's point of view
-        source_images = list(data["train"]["imageA"]) + list(data["train"]["imageB"])
+        target_images = list(data["train"]["imageA"]) + list(data["train"]["imageB"])
+
+        # "self" (default): reuse the target dataset's own images as the
+        # cutmix/draem donor content too (same as before). "dtd": use an
+        # external, out-of-domain texture pool instead - see data/dtd_source.py.
+        if self.change_source == "dtd":
+            from data.dtd_source import get_dtd_images
+
+            donor_images = get_dtd_images(self.data_path)
+            print(f"Using DTD as change-source pool: {len(donor_images)} textures")
+        elif self.change_source == "self":
+            donor_images = None  # SyntheticChangeDataset falls back to target_images
+        else:
+            raise ValueError(f"Unknown change_source {self.change_source}, expected 'self' or 'dtd'")
 
         # dataset-specific calibration of change area/frequency, measured from
         # each dataset's real (train-split) label masks - see synthetic_change.py
@@ -186,12 +203,19 @@ class SyntheticCDDataModule(CDDataModule):
         test_transforms = build_transforms(self.config, pretrain=False, test=True)
 
         self.train_data = SyntheticChangeDataset(
-            source_images, train_transforms, method=self.synth_method, **calib
+            target_images,
+            train_transforms,
+            method=self.synth_method,
+            soft_edges=self.soft_edges,
+            source_images=donor_images,
+            **calib,
         )
         self.val_data = SyntheticChangeDataset(
-            source_images,
+            target_images,
             test_transforms,
             method=self.synth_method,
+            soft_edges=self.soft_edges,
+            source_images=donor_images,
             **calib,
             seed=self.val_seed,
         )

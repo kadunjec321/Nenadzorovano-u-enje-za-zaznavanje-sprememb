@@ -58,7 +58,9 @@ class DataArgs:
     data_path: str = "./datasets"
     use_hf: bool = True
     load_in_mem: str | None = None
-    synth_method: str | None = None  # "cutpaste" / "cutmix": train on synthetic pairs instead of real labels
+    synth_method: str | None = None  # "cutpaste" / "cutmix" / "draem": train on synthetic pairs instead of real labels
+    synth_change_source: str = "self"  # "self" (reuse target dataset's own images) or "dtd" (external textures)
+    synth_soft_edges: bool = False  # draem only: Gaussian-blur the mask boundary instead of a hard cutoff
 
 
 def add_arguments(parser: ArgumentParser):

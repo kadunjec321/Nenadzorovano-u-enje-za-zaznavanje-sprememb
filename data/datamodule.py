@@ -157,11 +157,13 @@ class SyntheticCDDataModule(CDDataModule):
         synth_method: str = "cutpaste",
         change_source: str = "self",
         soft_edges: bool = False,
+        color_match: bool = False,
         val_seed: int = 42,
     ):
         self.synth_method = synth_method
         self.change_source = change_source
         self.soft_edges = soft_edges
+        self.color_match = color_match
         self.val_seed = val_seed
         super().__init__(
             config,
@@ -207,6 +209,7 @@ class SyntheticCDDataModule(CDDataModule):
             train_transforms,
             method=self.synth_method,
             soft_edges=self.soft_edges,
+            color_match=self.color_match,
             source_images=donor_images,
             **calib,
         )
@@ -215,6 +218,7 @@ class SyntheticCDDataModule(CDDataModule):
             test_transforms,
             method=self.synth_method,
             soft_edges=self.soft_edges,
+            color_match=self.color_match,
             source_images=donor_images,
             **calib,
             seed=self.val_seed,

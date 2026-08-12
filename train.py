@@ -159,6 +159,7 @@ def main(seed=None):
             synth_method=config.data.synth_method,
             change_source=config.data.synth_change_source,
             soft_edges=config.data.synth_soft_edges,
+            color_match=config.data.synth_color_match,
         )
     else:
         datamodule = CDDataModule(

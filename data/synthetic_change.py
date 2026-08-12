@@ -111,9 +111,9 @@ class SyntheticChangeDataset(Dataset):
     `source_images`, if given, is a SEPARATE pool used only as the "donor"
     content for cutmix/draem (e.g. DTD textures via data/dtd_source.py),
     instead of reusing `images` (the target dataset's own pool) for both
-    roles. `soft_edges` (draem only) is passed straight through to
-    draem_perlin() - both are optional, independently-testable variables,
-    off by default.
+    roles. `soft_edges` and `color_match` (draem only) are passed straight
+    through to draem_perlin() - both are optional, independently-testable
+    variables, off by default.
     """
 
     def __init__(
@@ -125,6 +125,7 @@ class SyntheticChangeDataset(Dataset):
         aspect_ratio: tuple[float, float] = (0.3, 3.3),
         no_change_prob: float = 0.0,
         soft_edges: bool = False,
+        color_match: bool = False,
         source_images=None,
         seed: int | None = None,
     ):
@@ -141,6 +142,7 @@ class SyntheticChangeDataset(Dataset):
         self.aspect_ratio = aspect_ratio
         self.no_change_prob = no_change_prob
         self.soft_edges = soft_edges
+        self.color_match = color_match
         self.seed = seed
 
     def __len__(self):
@@ -161,7 +163,12 @@ class SyntheticChangeDataset(Dataset):
         else:  # draem
             other = np.asarray(self.source_images[rng.integers(0, len(self.source_images))])
             imageA, imageB, label = draem_perlin(
-                image, other, self.area_ratio, rng, soft_edges=self.soft_edges
+                image,
+                other,
+                self.area_ratio,
+                rng,
+                soft_edges=self.soft_edges,
+                color_match=self.color_match,
             )
 
         data = {"imageA": imageA, "imageB": imageB, "label": label, "img_idx": index}

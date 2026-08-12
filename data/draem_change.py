@@ -112,8 +112,37 @@ def _perlin_mask(
     return mask.astype(np.uint8)
 
 
+def _match_color_stats(source, dest, weights):
+    """
+    Linearly rescale `source`'s per-channel mean/std to match `dest`'s,
+    both measured only over the region given by `weights` (a soft 0-1 mask).
+    Addresses an easy shortcut cue: a patch pulled from a differently-lit
+    source image looks jarringly different from its LOCAL destination
+    surroundings, unlike real changes which stay within the scene's own
+    lighting/color range.
+    """
+    w = weights[..., None]
+    total = w.sum()
+    if total < 1.0:
+        return source
+
+    src_mean = (source * w).sum(axis=(0, 1)) / total
+    dst_mean = (dest * w).sum(axis=(0, 1)) / total
+    src_std = np.sqrt((w * (source - src_mean) ** 2).sum(axis=(0, 1)) / total) + 1e-6
+    dst_std = np.sqrt((w * (dest - dst_mean) ** 2).sum(axis=(0, 1)) / total) + 1e-6
+
+    matched = (source - src_mean) / src_std * dst_std + dst_mean
+    return np.clip(matched, 0, 255)
+
+
 def draem_perlin(
-    image, source_image, area_ratio, rng=None, beta_range=(0.1, 1.0), soft_edges=False
+    image,
+    source_image,
+    area_ratio,
+    rng=None,
+    beta_range=(0.1, 1.0),
+    soft_edges=False,
+    color_match=False,
 ):
     """
     DRAEM-like synthetic change: an organic Perlin-noise-shaped mask, with
@@ -127,7 +156,9 @@ def draem_perlin(
     data/dtd_source.py and SyntheticCDDataModule's `change_source` option).
 
     `soft_edges=True` blurs the mask boundary (see `_perlin_mask`) instead of
-    a hard cutoff - an independent, optional variable.
+    a hard cutoff. `color_match=True` rescales the source patch's local
+    color/brightness statistics (within the mask) to match the destination's,
+    before blending. Both are independent, optional variables, off by default.
     """
     rng = rng or np.random.default_rng()
     h, w = image.shape[:2]
@@ -141,6 +172,10 @@ def draem_perlin(
 
     image_f = image.astype(np.float32)
     source_f = source_image.astype(np.float32)
+
+    if color_match:
+        source_f = _match_color_stats(source_f, image_f, mask_f[..., 0])
+
     blended = image_f * (1 - mask_f) + (beta * source_f + (1 - beta) * image_f) * mask_f
 
     imageA = image.copy()

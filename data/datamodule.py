@@ -203,11 +203,16 @@ class SyntheticCDDataModule(CDDataModule):
 
             donor_images = get_ucmerced_images(self.data_path)
             print(f"Using UC Merced Land Use as change-source pool: {len(donor_images)} scenes")
+        elif self.change_source == "minc":
+            from data.minc_source import get_minc_images
+
+            donor_images = get_minc_images(self.data_path)
+            print(f"Using MINC-2500 as change-source pool: {len(donor_images)} materials")
         elif self.change_source == "self":
             donor_images = None  # SyntheticChangeDataset falls back to target_images
         else:
             raise ValueError(
-                f"Unknown change_source {self.change_source}, expected 'self', 'dtd', 'nwpu' or 'ucmerced'"
+                f"Unknown change_source {self.change_source}, expected 'self', 'dtd', 'nwpu', 'ucmerced' or 'minc'"
             )
 
         # dataset-specific calibration of change area/frequency, measured from

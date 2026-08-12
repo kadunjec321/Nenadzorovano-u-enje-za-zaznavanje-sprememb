@@ -59,7 +59,7 @@ class DataArgs:
     use_hf: bool = True
     load_in_mem: str | None = None
     synth_method: str | None = None  # "cutpaste" / "cutmix" / "draem": train on synthetic pairs instead of real labels
-    synth_change_source: str = "self"  # "self" (reuse target dataset's own images), "dtd" (external textures), "nwpu" (external in-domain aerial/satellite scenes) or "ucmerced" (external in-domain aerial scenes with concrete land-use classes)
+    synth_change_source: str = "self"  # "self" (reuse target dataset's own images), "dtd" (external textures), "nwpu" (external in-domain aerial/satellite scenes), "ucmerced" (external in-domain aerial scenes with concrete land-use classes) or "minc" (external out-of-domain material/texture pool, larger DTD-like alternative)
     synth_soft_edges: bool = False  # draem only: Gaussian-blur the mask boundary instead of a hard cutoff
     synth_color_match: bool = False  # draem only: rescale source patch's local color/brightness stats to match destination before blending
 

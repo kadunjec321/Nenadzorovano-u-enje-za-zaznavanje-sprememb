@@ -186,15 +186,24 @@ class SyntheticCDDataModule(CDDataModule):
         # "self" (default): reuse the target dataset's own images as the
         # cutmix/draem donor content too (same as before). "dtd": use an
         # external, out-of-domain texture pool instead - see data/dtd_source.py.
+        # "nwpu": use NWPU-RESISC45, an external but IN-DOMAIN (real aerial/
+        # satellite scenes) pool instead - see data/nwpu_source.py.
         if self.change_source == "dtd":
             from data.dtd_source import get_dtd_images
 
             donor_images = get_dtd_images(self.data_path)
             print(f"Using DTD as change-source pool: {len(donor_images)} textures")
+        elif self.change_source == "nwpu":
+            from data.nwpu_source import get_nwpu_images
+
+            donor_images = get_nwpu_images(self.data_path)
+            print(f"Using NWPU-RESISC45 as change-source pool: {len(donor_images)} scenes")
         elif self.change_source == "self":
             donor_images = None  # SyntheticChangeDataset falls back to target_images
         else:
-            raise ValueError(f"Unknown change_source {self.change_source}, expected 'self' or 'dtd'")
+            raise ValueError(
+                f"Unknown change_source {self.change_source}, expected 'self', 'dtd' or 'nwpu'"
+            )
 
         # dataset-specific calibration of change area/frequency, measured from
         # each dataset's real (train-split) label masks - see synthetic_change.py

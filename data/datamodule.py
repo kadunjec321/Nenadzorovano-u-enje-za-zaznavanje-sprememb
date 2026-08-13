@@ -158,12 +158,18 @@ class SyntheticCDDataModule(CDDataModule):
         change_source: str = "self",
         soft_edges: bool = False,
         color_match: bool = False,
+        beta_range: tuple[float, float] = (0.1, 1.0),
+        n_patches: int = 1,
+        photometric_aug: bool = False,
         val_seed: int = 42,
     ):
         self.synth_method = synth_method
         self.change_source = change_source
         self.soft_edges = soft_edges
         self.color_match = color_match
+        self.beta_range = beta_range
+        self.n_patches = n_patches
+        self.photometric_aug = photometric_aug
         self.val_seed = val_seed
         super().__init__(
             config,
@@ -208,11 +214,22 @@ class SyntheticCDDataModule(CDDataModule):
 
             donor_images = get_minc_images(self.data_path)
             print(f"Using MINC-2500 as change-source pool: {len(donor_images)} materials")
+        elif self.change_source == "mixed":
+            # combined pool of all external sources - SyntheticChangeDataset's
+            # per-sample random draw already picks uniformly across whatever
+            # pool it's given, so concatenating is enough to get a per-sample
+            # random mix of DTD/NWPU/MINC content instead of one fixed source.
+            from data.dtd_source import get_dtd_images
+            from data.nwpu_source import get_nwpu_images
+            from data.minc_source import get_minc_images
+
+            donor_images = get_dtd_images(self.data_path) + get_nwpu_images(self.data_path) + get_minc_images(self.data_path)
+            print(f"Using mixed DTD+NWPU+MINC change-source pool: {len(donor_images)} images")
         elif self.change_source == "self":
             donor_images = None  # SyntheticChangeDataset falls back to target_images
         else:
             raise ValueError(
-                f"Unknown change_source {self.change_source}, expected 'self', 'dtd', 'nwpu', 'ucmerced' or 'minc'"
+                f"Unknown change_source {self.change_source}, expected 'self', 'dtd', 'nwpu', 'ucmerced', 'minc' or 'mixed'"
             )
 
         # dataset-specific calibration of change area/frequency, measured from
@@ -229,6 +246,9 @@ class SyntheticCDDataModule(CDDataModule):
             method=self.synth_method,
             soft_edges=self.soft_edges,
             color_match=self.color_match,
+            beta_range=self.beta_range,
+            n_patches=self.n_patches,
+            photometric_aug=self.photometric_aug,
             source_images=donor_images,
             **calib,
         )
@@ -238,6 +258,9 @@ class SyntheticCDDataModule(CDDataModule):
             method=self.synth_method,
             soft_edges=self.soft_edges,
             color_match=self.color_match,
+            beta_range=self.beta_range,
+            n_patches=self.n_patches,
+            photometric_aug=self.photometric_aug,
             source_images=donor_images,
             **calib,
             seed=self.val_seed,

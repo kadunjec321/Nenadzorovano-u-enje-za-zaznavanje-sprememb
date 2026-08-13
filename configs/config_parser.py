@@ -59,9 +59,13 @@ class DataArgs:
     use_hf: bool = True
     load_in_mem: str | None = None
     synth_method: str | None = None  # "cutpaste" / "cutmix" / "draem": train on synthetic pairs instead of real labels
-    synth_change_source: str = "self"  # "self" (reuse target dataset's own images), "dtd" (external textures), "nwpu" (external in-domain aerial/satellite scenes), "ucmerced" (external in-domain aerial scenes with concrete land-use classes) or "minc" (external out-of-domain material/texture pool, larger DTD-like alternative)
+    synth_change_source: str = "self"  # "self" (reuse target dataset's own images), "dtd" (external textures), "nwpu" (external in-domain aerial/satellite scenes), "ucmerced" (external in-domain aerial scenes with concrete land-use classes), "minc" (external out-of-domain material/texture pool, larger DTD-like alternative) or "mixed" (combined DTD+NWPU+MINC pool, random per-sample)
     synth_soft_edges: bool = False  # draem only: Gaussian-blur the mask boundary instead of a hard cutoff
     synth_color_match: bool = False  # draem only: rescale source patch's local color/brightness stats to match destination before blending
+    synth_beta_min: float = 0.1  # draem only: lower bound of the blend-opacity range (1.0 = full replacement, no transparency)
+    synth_beta_max: float = 1.0  # draem only: upper bound of the blend-opacity range
+    synth_n_patches: int = 1  # draem only: number of independent blob instances (each own donor image + opacity) making up the total change area
+    synth_photometric_aug: bool = False  # global independent brightness/contrast jitter on imageA vs imageB (different from synth_color_match - see SyntheticChangeDataset docstring)
 
 
 def add_arguments(parser: ArgumentParser):

@@ -182,3 +182,57 @@ def draem_perlin(
     imageB = np.clip(blended, 0, 255).astype(image.dtype)
 
     return imageA, imageB, mask
+
+
+def draem_perlin_multi(
+    image,
+    source_pool,
+    area_ratio,
+    rng=None,
+    beta_range=(0.1, 1.0),
+    soft_edges=False,
+    color_match=False,
+    n_patches=1,
+):
+    """
+    Multi-instance variant of draem_perlin(): splits the total change area
+    across `n_patches` INDEPENDENT blobs, each drawing its own random donor
+    image from `source_pool` and its own random beta - instead of one blob
+    with one shared texture/opacity for the whole change. Meant to reduce
+    the risk of the model latching onto "one specific recurring texture" as
+    a shortcut, since no two patches in the same pair need look alike.
+
+    n_patches=1 reduces to the same single-blob behavior as draem_perlin(),
+    just sourced from a pool instead of one pre-picked image.
+    """
+    rng = rng or np.random.default_rng()
+    h, w = image.shape[:2]
+    image_f = image.astype(np.float32)
+    blended = image_f.copy()
+    combined_mask = np.zeros((h, w), dtype=np.float32)
+
+    total_area = rng.uniform(*area_ratio)
+    shares = rng.dirichlet(np.ones(n_patches)) * total_area
+
+    for share in shares:
+        mask = _perlin_mask(h, w, (share, share), rng, soft_edges=soft_edges)
+        mask_f = mask.astype(np.float32) / 255.0
+
+        source_image = source_pool[rng.integers(0, len(source_pool))]
+        source_image = np.asarray(source_image)
+        if source_image.shape[:2] != (h, w):
+            source_image = np.array(Image.fromarray(source_image).resize((w, h)))
+        source_f = source_image.astype(np.float32)
+
+        if color_match:
+            source_f = _match_color_stats(source_f, blended, mask_f)
+
+        beta = rng.uniform(*beta_range)
+        mask_f3 = mask_f[..., None]
+        blended = blended * (1 - mask_f3) + (beta * source_f + (1 - beta) * blended) * mask_f3
+        combined_mask = np.maximum(combined_mask, mask.astype(np.float32))
+
+    imageA = image.copy()
+    imageB = np.clip(blended, 0, 255).astype(image.dtype)
+
+    return imageA, imageB, combined_mask.astype(np.uint8)

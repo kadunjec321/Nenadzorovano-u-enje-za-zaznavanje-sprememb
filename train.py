@@ -160,6 +160,9 @@ def main(seed=None):
             change_source=config.data.synth_change_source,
             soft_edges=config.data.synth_soft_edges,
             color_match=config.data.synth_color_match,
+            beta_range=(config.data.synth_beta_min, config.data.synth_beta_max),
+            n_patches=config.data.synth_n_patches,
+            photometric_aug=config.data.synth_photometric_aug,
         )
     else:
         datamodule = CDDataModule(

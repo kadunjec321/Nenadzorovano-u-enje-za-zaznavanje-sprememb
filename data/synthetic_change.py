@@ -2,7 +2,7 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 
-from data.draem_change import draem_perlin
+from data.draem_change import draem_perlin_multi
 
 # Per-dataset calibration measured from each dataset's real train-split label
 # masks (fraction of changed pixels per image, n=200 sample): `area_ratio`
@@ -89,6 +89,27 @@ def cutmix(image, source_image, area_ratio=(0.02, 0.15), aspect_ratio=(0.3, 3.3)
     return imageA, imageB, mask
 
 
+def _photometric_jitter(image, rng, brightness_range=(0.7, 1.3), contrast_range=(0.7, 1.3)):
+    """
+    Independent random brightness/contrast shift, applied separately to
+    imageA and imageB (each call gets its own rng draws). Simulates the
+    global lighting/color difference real bi-temporal pairs often have
+    (season, sensor, time of day) that the model must learn to ignore -
+    NOT the same thing as `color_match` in draem_change.py, which fixes a
+    LOCAL patch-vs-surroundings mismatch instead. Done here (not via the
+    shared albumentations pipeline in transforms.py) because that pipeline's
+    `additional_targets` applies the SAME random draw to imageA and imageB,
+    which would cancel out any A-vs-B difference.
+    """
+    img = image.astype(np.float32)
+    brightness = rng.uniform(*brightness_range)
+    contrast = rng.uniform(*contrast_range)
+    mean = img.mean()
+    img = (img - mean) * contrast + mean
+    img = img * brightness
+    return np.clip(img, 0, 255).astype(image.dtype)
+
+
 class SyntheticChangeDataset(Dataset):
     """
     Generates (imageA, imageB, label) change-detection triples on the fly from
@@ -111,9 +132,17 @@ class SyntheticChangeDataset(Dataset):
     `source_images`, if given, is a SEPARATE pool used only as the "donor"
     content for cutmix/draem (e.g. DTD textures via data/dtd_source.py),
     instead of reusing `images` (the target dataset's own pool) for both
-    roles. `soft_edges` and `color_match` (draem only) are passed straight
-    through to draem_perlin() - both are optional, independently-testable
-    variables, off by default.
+    roles. `soft_edges`, `color_match`, `beta_range` and `n_patches` (draem
+    only) are passed straight through to draem_perlin_multi(). `n_patches`
+    controls how many independent blobs (each with its own random donor
+    image and opacity) make up the total change area - default 1 matches
+    the original single-blob behavior. `photometric_aug`, if True, applies
+    an independent random brightness/contrast shift to imageA and imageB
+    (see `_photometric_jitter`) - a different, complementary variable from
+    `color_match` (that one fixes a LOCAL patch/surroundings mismatch, this
+    one adds a GLOBAL whole-image lighting difference the model must learn
+    to ignore). All of these are optional, independently-testable
+    variables, off by default (or n_patches=1 / beta_range unchanged).
     """
 
     def __init__(
@@ -126,6 +155,9 @@ class SyntheticChangeDataset(Dataset):
         no_change_prob: float = 0.0,
         soft_edges: bool = False,
         color_match: bool = False,
+        beta_range: tuple[float, float] = (0.1, 1.0),
+        n_patches: int = 1,
+        photometric_aug: bool = False,
         source_images=None,
         seed: int | None = None,
     ):
@@ -143,6 +175,9 @@ class SyntheticChangeDataset(Dataset):
         self.no_change_prob = no_change_prob
         self.soft_edges = soft_edges
         self.color_match = color_match
+        self.beta_range = beta_range
+        self.n_patches = n_patches
+        self.photometric_aug = photometric_aug
         self.seed = seed
 
     def __len__(self):
@@ -161,15 +196,20 @@ class SyntheticChangeDataset(Dataset):
             other = np.asarray(self.source_images[rng.integers(0, len(self.source_images))])
             imageA, imageB, label = cutmix(image, other, self.area_ratio, self.aspect_ratio, rng)
         else:  # draem
-            other = np.asarray(self.source_images[rng.integers(0, len(self.source_images))])
-            imageA, imageB, label = draem_perlin(
+            imageA, imageB, label = draem_perlin_multi(
                 image,
-                other,
+                self.source_images,
                 self.area_ratio,
                 rng,
+                beta_range=self.beta_range,
                 soft_edges=self.soft_edges,
                 color_match=self.color_match,
+                n_patches=self.n_patches,
             )
+
+        if self.photometric_aug:
+            imageA = _photometric_jitter(imageA, rng)
+            imageB = _photometric_jitter(imageB, rng)
 
         data = {"imageA": imageA, "imageB": imageB, "label": label, "img_idx": index}
         transformed = self.transform(data)

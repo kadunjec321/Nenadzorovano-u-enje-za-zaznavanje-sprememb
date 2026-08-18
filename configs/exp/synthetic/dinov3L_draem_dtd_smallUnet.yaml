@@ -1,0 +1,62 @@
+config_tag: BTC-dinov3L-draem-dtd-smallUnet   # use for experiment naming and wandb log names (can also use separate optional "tag")
+seed: 42
+devices: "auto"
+res_path: "./results"
+
+wandb_proj: None      # set to a project name to enable wandb logging
+vis_path: True
+ckpt_path: None
+
+dev: False
+
+# dataset details - override on CLI for OSCD/CLCD/GVLM, e.g. --data.dataset oscd96
+# train/val are SYNTHETIC pairs generated from this dataset's own images (no real
+# labels used); test stays real, so the eval step at the end of train.py already
+# gives the real zero-shot metric for this dataset.
+data:
+  dataset: "clcd"
+  synth_method: "draem"    # Perlin-noise organic mask + soft alpha blend
+  synth_change_source: "dtd"     # donor content for the blend comes from DTD textures, not the dataset's own images - see data/dtd_source.py
+  img_size: 256
+  num_workers: 8
+  batch_size: 4     # ViT-L/16 (~300M params) is bigger than Swin-Base, lower default to fit ~15GB GPUs (e.g. T4)
+  pin_memory: True
+
+train:
+  epochs: 100
+  val_freq: 5
+  base_lr: 1.0e-4
+  weight_decay: 1e-4
+  layer_decay: 0.99     # unused
+  lr_scheduler:
+    type: "cosine"
+    ratio_t0: 1
+  loss:
+    - dice
+  transforms:
+    - VerticalFlip: { p: 0.3 }
+    - HorizontalFlip: { p: 0.3 }
+    - Rotate: { limit: [ -90, 90 ], p: 0.3 }
+    # DINOv3 SAT-493M was pretrained on satellite imagery with its own normalization stats,
+    # NOT standard ImageNet mean/std - see facebook/dinov3-vitl16-pretrain-sat493m model card.
+    - Normalize: { mean: [ 0.430, 0.411, 0.296 ], std: [ 0.213, 0.156, 0.143 ] }
+
+encoder:
+  class_path: models.modules.hf_backbone.HFBackbone
+  init_args:
+    model_name: facebook/dinov3-vitl16-pretrain-sat493m
+    return_layers: [6, 12, 18, 24]   # ViT-L has 24 transformer blocks; quarter-depth taps, mirroring Swin's 4 stages
+    train_args:
+      pretrained: True
+      finetune: True
+
+diff:
+  class_path: models.modules.simple_diff.SubDiff
+
+decoder:
+  train:
+    class_path: models.modules.opencd_unet.UNetHead
+    init_args:
+      out_channels: 1
+      decoder_channels: [256, 128, 64, 32]
+      channels: 32   # must match decoder_channels[-1] (feeds final conv_seg)

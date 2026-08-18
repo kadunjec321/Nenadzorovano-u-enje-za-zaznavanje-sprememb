@@ -18,7 +18,7 @@ data:
   synth_method: "cutpaste"   # or "cutmix" - see configs/exp/synthetic/dinov3L_cutmix.yaml
   img_size: 256
   num_workers: 8
-  batch_size: 4     # ViT-L/16 (~300M params) is bigger than Swin-Base, lower default to fit ~15GB GPUs (e.g. T4)
+  batch_size: 32
   pin_memory: True
 
 train:

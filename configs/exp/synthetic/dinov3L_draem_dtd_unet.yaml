@@ -19,7 +19,7 @@ data:
   synth_change_source: "dtd"     # donor content for the blend comes from DTD textures, not the dataset's own images - see data/dtd_source.py
   img_size: 256
   num_workers: 8
-  batch_size: 4     # ViT-L/16 (~300M params) is bigger than Swin-Base, lower default to fit ~15GB GPUs (e.g. T4)
+  batch_size: 32
   pin_memory: True
 
 train:
